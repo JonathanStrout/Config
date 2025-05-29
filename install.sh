@@ -33,6 +33,8 @@ WINDOWS_GIT_EMAIL=""
 COPY_WINDOWS_GIT_CONFIG=false
 USE_WINDOWS_CREDENTIALS=false
 SET_WSL_DEFAULT=false
+REMOVE_EXISTING_PYENV=false
+REMOVE_EXISTING_NVM=false
 
 
 # Function to print status messages
@@ -308,12 +310,40 @@ gather_user_input() {
     read -p "Do you want to install pyenv (Python version manager)? (Y/n): " INSTALL_PYENV_CHOICE
     if [[ "$INSTALL_PYENV_CHOICE" == "n" || "$INSTALL_PYENV_CHOICE" == "N" ]]; then
         INSTALL_PYENV=false
+    else
+        # Check if pyenv directory already exists
+        if [ -d "$LINUX_HOME/.pyenv" ]; then
+            echo ""
+            print_warning "pyenv directory already exists at $LINUX_HOME/.pyenv"
+            read -p "Do you want to remove the existing pyenv installation and reinstall? (Y/n): " remove_pyenv
+            if [[ "$remove_pyenv" == "n" || "$remove_pyenv" == "N" ]]; then
+                print_status "Will keep existing pyenv installation."
+                INSTALL_PYENV=false
+            else
+                print_status "Will remove and reinstall pyenv."
+                REMOVE_EXISTING_PYENV=true
+            fi
+        fi
     fi
     
     # nvm installation
     read -p "Do you want to install nvm (Node.js version manager)? (Y/n): " INSTALL_NVM_CHOICE
     if [[ "$INSTALL_NVM_CHOICE" == "n" || "$INSTALL_NVM_CHOICE" == "N" ]]; then
         INSTALL_NVM=false
+    else
+        # Check if nvm directory already exists
+        if [ -d "$LINUX_HOME/.nvm" ]; then
+            echo ""
+            print_warning "nvm directory already exists at $LINUX_HOME/.nvm"
+            read -p "Do you want to remove the existing nvm installation and reinstall? (Y/n): " remove_nvm
+            if [[ "$remove_nvm" == "n" || "$remove_nvm" == "N" ]]; then
+                print_status "Will keep existing nvm installation."
+                INSTALL_NVM=false
+            else
+                print_status "Will remove and reinstall nvm."
+                REMOVE_EXISTING_NVM=true
+            fi
+        fi
     fi
 
     print_status "Thank you! Installation will now begin..."
@@ -810,17 +840,8 @@ install_pyenv() {
         return
     fi
     
-    # Check if pyenv directory already exists
-    if [ -d "$LINUX_HOME/.pyenv" ]; then
-        echo ""
-        print_warning "pyenv directory already exists at $LINUX_HOME/.pyenv"
-        if [ "$NON_INTERACTIVE" = false ]; then
-            read -p "Do you want to remove the existing pyenv installation and reinstall? (y/N): " remove_pyenv
-            if [[ "$remove_pyenv" != "y" && "$remove_pyenv" != "Y" ]]; then
-                print_status "Keeping existing pyenv installation."
-                return
-            fi
-        fi
+    # Remove existing pyenv if user chose to do so
+    if [ "$REMOVE_EXISTING_PYENV" = true ] && [ -d "$LINUX_HOME/.pyenv" ]; then
         print_status "Removing existing pyenv directory..."
         rm -rf "$LINUX_HOME/.pyenv"
     fi
@@ -878,17 +899,8 @@ install_nvm() {
         return
     fi
     
-    # Check if nvm directory already exists
-    if [ -d "$LINUX_HOME/.nvm" ]; then
-        echo ""
-        print_warning "nvm directory already exists at $LINUX_HOME/.nvm"
-        if [ "$NON_INTERACTIVE" = false ]; then
-            read -p "Do you want to remove the existing nvm installation and reinstall? (y/N): " remove_nvm
-            if [[ "$remove_nvm" != "y" && "$remove_nvm" != "Y" ]]; then
-                print_status "Keeping existing nvm installation."
-                return
-            fi
-        fi
+    # Remove existing nvm if user chose to do so
+    if [ "$REMOVE_EXISTING_NVM" = true ] && [ -d "$LINUX_HOME/.nvm" ]; then
         print_status "Removing existing nvm directory..."
         rm -rf "$LINUX_HOME/.nvm"
     fi
