@@ -334,7 +334,7 @@ gather_user_input() {
     else
         # Check if pyenv directory already exists
         if [ -d "$LINUX_HOME/.pyenv" ]; then
-            print_bright_warning "pyenv directory already exists at $LINUX_HOME/.pyenv"
+            echo -e "${BRIGHT_YELLOW}[!] pyenv directory already exists at $LINUX_HOME/.pyenv${NC}"
             echo -e -n "${BRIGHT_YELLOW}Do you want to remove the existing pyenv installation and reinstall? (Y/n): ${NC}"
             read remove_pyenv
             if [[ "$remove_pyenv" == "n" || "$remove_pyenv" == "N" ]]; then
@@ -355,7 +355,7 @@ gather_user_input() {
     else
         # Check if nvm directory already exists
         if [ -d "$LINUX_HOME/.nvm" ]; then
-            print_bright_warning "nvm directory already exists at $LINUX_HOME/.nvm"
+            echo -e "${BRIGHT_YELLOW}[!] nvm directory already exists at $LINUX_HOME/.nvm${NC}"
             echo -e -n "${BRIGHT_YELLOW}Do you want to remove the existing nvm installation and reinstall? (Y/n): ${NC}"
             read remove_nvm
             if [[ "$remove_nvm" == "n" || "$remove_nvm" == "N" ]]; then
