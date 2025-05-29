@@ -189,7 +189,6 @@ gather_user_input() {
 
     # Windows Git Configuration Handling
     if [ "$WINDOWS_GIT_CONFIG_EXISTS" = true ]; then
-        echo ""
         print_status "Windows Git configuration detected!"
         if [ -n "$WINDOWS_GIT_NAME" ]; then
             echo "  Name: $WINDOWS_GIT_NAME"
@@ -1030,30 +1029,19 @@ prompt_wsl_restart() {
     if [ "$WSL_CONF_MODIFIED" = true ] && [ -d "/mnt/c" ]; then
         echo ""
         print_status "WSL configuration modified - restart required to apply changes."
-        
-        # Create a restart batch file on the Windows desktop
-        WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')
-        DESKTOP_PATH="/mnt/c/Users/$WIN_USERNAME/Desktop"
-        RESTART_BATCH="$DESKTOP_PATH/Restart-WSL.bat"
-        
-        cat > "$RESTART_BATCH" << 'EOF'
-@echo off
-echo Restarting WSL to apply configuration changes...
-echo.
-wsl --shutdown
-echo Waiting for WSL to shutdown...
-timeout /t 3 /nobreak >nul
-echo Starting WSL...
-wsl
-del "%~f0"
-EOF
-        
-        print_status "Created 'Restart-WSL.bat' on your Desktop"
-        echo -e "${YELLOW}To apply changes: Close WSL and double-click the batch file${NC}"
-        echo ""
-        
-        echo -e -n "${GREEN}Press Enter to continue...${NC}"
+        echo -e -n "${GREEN}Press Enter to restart WSL and apply changes...${NC}"
         read
+        
+        print_status "Restarting WSL..."
+        
+        # Use PowerShell to shutdown and restart WSL
+        /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --shutdown" >/dev/null 2>&1
+        
+        # Wait a moment for shutdown to complete
+        sleep 2
+        
+        # Start WSL again (this will return to the same terminal)
+        exec /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl"
     fi
 }
 
