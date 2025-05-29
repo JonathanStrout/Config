@@ -12,17 +12,20 @@ This script sets up a complete development environment by:
 
 - Setting up Git with your name and email
 - Installing and configuring GPG for secure credential storage
-- Installing Git Credential Manager for easier authentication
+- Installing Git Credential Manager for easier authentication (or using Git for Windows credential manager if available)
 - Setting up Homebrew
 - Installing pyenv for Python version management
 - Installing nvm for Node.js version management
 - Automatically adding windows tools to your WSL path, including:
   - C:\Windows Folder
+  - Git for Windows (if installed)
   - Microsoft VS Code
   - Cursor editor
   - Docker Desktop
 
 The script will ask for your Git name, email, and which components you want to install before proceeding.
+
+**Smart Git Credential Manager Detection**: If you're running in WSL and have Git for Windows installed, the script will automatically use the Windows Git Credential Manager instead of installing the Linux version, providing better integration with Windows authentication systems.
 
 ## Advanced Usage
 

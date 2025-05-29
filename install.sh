@@ -22,6 +22,7 @@ CHANGE_GIT_CONFIG=false
 INSTALL_HOMEBREW_CHOICE=""
 INSTALL_GCM_CHOICE=""
 WSL_CONF_MODIFIED=false
+WINDOWS_GIT_FOUND=false
 
 
 # Function to print status messages
@@ -360,6 +361,63 @@ EOF
     print_status "GPG and pass password manager installed and configured successfully."
 }
 
+# Configure WSL-specific settings
+configure_wsl() {
+    if [ -d "/mnt/c" ]; then
+        print_status "WSL environment detected. Configuring WSL-specific settings..."
+        cd /mnt/c && WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' | tr -d '\r') && cd ~
+
+        echo >> "$LINUX_HOME/.bashrc"
+        echo "# WSL-specific configuration" >> "$LINUX_HOME/.bashrc"
+        echo "export WIN_USERNAME=\"$WIN_USERNAME\" # Windows username" >> "$LINUX_HOME/.bashrc"
+        echo 'export PATH="$PATH:/mnt/c/Windows" # Adds Windows folder to path' >> "$LINUX_HOME/.bashrc"
+
+        # Check for Git for Windows and add to PATH if present
+        if [ -d "/mnt/c/Program Files/Git/mingw64/bin" ]; then
+            echo 'export PATH="$PATH:/mnt/c/Program Files/Git/mingw64/bin" # Adds Git for Windows to path' >> "$LINUX_HOME/.bashrc"
+            WINDOWS_GIT_FOUND=true
+            print_status "Git for Windows found - will use Windows Git Credential Manager"
+        fi
+
+        if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code" ]; then
+            echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code/bin\" # Adds vscode folder to path" >> "$LINUX_HOME/.bashrc"
+        fi    
+
+        if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor" ]; then
+            echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor/resources/app/bin\" # Adds cursor folder to path" >> "$LINUX_HOME/.bashrc"
+        fi    
+
+        # Add Docker Desktop for Windows CLI to PATH if present
+        if [ -d "/mnt/c/Program Files/Docker/Docker/resources/bin" ]; then
+            echo 'export PATH="$PATH:/mnt/c/Program Files/Docker/Docker/resources/bin" # Adds Docker Desktop CLI to path' >> "$LINUX_HOME/.bashrc"
+        fi    
+
+        print_status "Configuring /etc/wsl.conf..."
+        if ! grep -q "appendWindowsPath = false" /etc/wsl.conf; then
+            sudo bash -c 'echo -e "\n[interop]\nappendWindowsPath=false" >> /etc/wsl.conf'
+            check_success "Failed to update /etc/wsl.conf"
+            WSL_CONF_MODIFIED=true
+        fi
+        
+        # Fix path conflicts between Windows and WSL tools
+        print_status "Adding protection against Windows/WSL path conflicts..."
+        cat << 'EOF' >> "$LINUX_HOME/.bashrc"
+# Safeguard against Windows PATH conflicts
+function command_not_found_handle() {
+  if [ -x /usr/lib/command-not-found ]; then
+    /usr/lib/command-not-found -- "$1"
+    return $?
+  else
+    return 127
+  fi
+}
+EOF
+        print_status "WSL-specific configurations completed."
+    else
+        print_verbose "Not running in WSL, skipping WSL-specific configurations."
+    fi
+}
+
 # Install Git Credential Manager
 install_git_credential_manager() {
     if [ "$INSTALL_GCM" = false ]; then
@@ -367,7 +425,23 @@ install_git_credential_manager() {
         return
     fi
     
-    print_status "Installing Git Credential Manager..."
+    # If Windows Git was found, use that instead of installing Linux GCM
+    if [ "$WINDOWS_GIT_FOUND" = true ]; then
+        print_status "Using Git Credential Manager from Git for Windows..."
+        
+        # Configure Git to use the credential manager from Windows
+        if [ -f "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe" ]; then
+            # Configure credential helper to use Windows GCM
+            git config --global credential.helper '"/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe"'
+            print_status "Git configured to use Windows Git Credential Manager"
+        else
+            print_warning "Git for Windows found but git-credential-manager.exe not found"
+            print_warning "You may need to update Git for Windows to get credential manager support"
+        fi
+        return
+    fi
+    
+    print_status "Installing Git Credential Manager for Linux..."
     
     # Create a temporary directory for GCM installation
     GCM_TEMP_DIR=$(mktemp -d)
@@ -604,56 +678,6 @@ EOF
     print_status "nvm installed successfully."
 }
 
-# Configure WSL-specific settings
-configure_wsl() {
-    if [ -d "/mnt/c" ]; then
-        print_status "WSL environment detected. Configuring WSL-specific settings..."
-        cd /mnt/c && WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' | tr -d '\r') && cd ~
-
-        echo >> "$LINUX_HOME/.bashrc"
-        echo "# WSL-specific configuration" >> "$LINUX_HOME/.bashrc"
-        echo "export WIN_USERNAME=\"$WIN_USERNAME\" # Windows username" >> "$LINUX_HOME/.bashrc"
-        echo 'export PATH="$PATH:/mnt/c/Windows" # Adds Windows folder to path' >> "$LINUX_HOME/.bashrc"
-
-        if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code" ]; then
-            echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code/bin\" # Adds vscode folder to path" >> "$LINUX_HOME/.bashrc"
-        fi    
-
-        if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor" ]; then
-            echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor/resources/app/bin\" # Adds cursor folder to path" >> "$LINUX_HOME/.bashrc"
-        fi    
-
-        # Add Docker Desktop for Windows CLI to PATH if present
-        if [ -d "/mnt/c/Program Files/Docker/Docker/resources/bin" ]; then
-            echo "export PATH=\"\$PATH:/mnt/c/Program Files/Docker/Docker/resources/bin\" # Adds Docker Desktop CLI to path" >> "$LINUX_HOME/.bashrc"
-        fi    
-
-        print_status "Configuring /etc/wsl.conf..."
-        if ! grep -q "appendWindowsPath = false" /etc/wsl.conf; then
-            sudo bash -c 'echo -e "\n[interop]\nappendWindowsPath=false" >> /etc/wsl.conf'
-            check_success "Failed to update /etc/wsl.conf"
-            WSL_CONF_MODIFIED=true
-        fi
-        
-        # Fix path conflicts between Windows and WSL tools
-        print_status "Adding protection against Windows/WSL path conflicts..."
-        cat << 'EOF' >> "$LINUX_HOME/.bashrc"
-# Safeguard against Windows PATH conflicts
-function command_not_found_handle() {
-  if [ -x /usr/lib/command-not-found ]; then
-    /usr/lib/command-not-found -- "$1"
-    return $?
-  else
-    return 127
-  fi
-}
-EOF
-        print_status "WSL-specific configurations completed."
-    else
-        print_verbose "Not running in WSL, skipping WSL-specific configurations."
-    fi
-}
-
 # Verify installations
 verify_installations() {
     print_status "Verifying installations..."
@@ -729,7 +753,11 @@ print_summary() {
     fi
 
     if [ "$INSTALL_GCM" = true ]; then
-        echo -e "- Git Credential Manager"
+        if [ "$WINDOWS_GIT_FOUND" = true ]; then
+            echo -e "- Git Credential Manager (from Git for Windows)"
+        else
+            echo -e "- Git Credential Manager (Linux version)"
+        fi
     fi
 
     if [ -d "/mnt/c" ]; then
@@ -749,11 +777,11 @@ main() {
     install_system_packages
     configure_git
     install_gpg_and_pass
+    configure_wsl
     install_git_credential_manager
     install_homebrew
     install_pyenv
     install_nvm
-    configure_wsl
     verify_installations
     prompt_wsl_restart
     print_summary
