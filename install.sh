@@ -3,6 +3,7 @@
 # Color codes for better readability
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BRIGHT_YELLOW='\033[1;93m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
@@ -52,6 +53,11 @@ print_verbose() {
 # Function to print warning messages
 print_warning() {
     echo -e "${YELLOW}[!] $1${NC}"
+}
+
+# Function to print bright warning messages (for directory conflicts)
+print_bright_warning() {
+    echo -e "${BRIGHT_YELLOW}[!] $1${NC}"
 }
 
 # Function to print error messages
@@ -328,7 +334,7 @@ gather_user_input() {
     else
         # Check if pyenv directory already exists
         if [ -d "$LINUX_HOME/.pyenv" ]; then
-            print_warning "pyenv directory already exists at $LINUX_HOME/.pyenv"
+            print_bright_warning "pyenv directory already exists at $LINUX_HOME/.pyenv"
             echo -e -n "${GREEN}Do you want to remove the existing pyenv installation and reinstall? (Y/n): ${NC}"
             read remove_pyenv
             if [[ "$remove_pyenv" == "n" || "$remove_pyenv" == "N" ]]; then
@@ -349,7 +355,7 @@ gather_user_input() {
     else
         # Check if nvm directory already exists
         if [ -d "$LINUX_HOME/.nvm" ]; then
-            print_warning "nvm directory already exists at $LINUX_HOME/.nvm"
+            print_bright_warning "nvm directory already exists at $LINUX_HOME/.nvm"
             echo -e -n "${GREEN}Do you want to remove the existing nvm installation and reinstall? (Y/n): ${NC}"
             read remove_nvm
             if [[ "$remove_nvm" == "n" || "$remove_nvm" == "N" ]]; then
@@ -373,14 +379,21 @@ setup_sudo() {
     if sudo -n true 2>/dev/null; then
         print_status "Sudo session already established."
     else
-        # Need to prompt for password
+        # Need to prompt for password with green styling
         echo -e "${GREEN}[+] Please enter your sudo password to continue:${NC}"
+        
+        # Set the sudo prompt to be green (this affects the actual sudo password prompt)
+        export SUDO_PROMPT=$'\033[0;32m[sudo] password for %u: \033[0m'
+        
         if sudo -v; then
             print_status "Sudo session established."
         else
             print_error "Sudo required but authentication failed. Exiting..."
             exit 1
         fi
+        
+        # Reset sudo prompt to default (optional, but good practice)
+        unset SUDO_PROMPT
     fi
 
     # Keep sudo alive for the necessary commands
