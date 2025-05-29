@@ -1049,7 +1049,6 @@ prompt_wsl_restart() {
     if [ "$WSL_CONF_MODIFIED" = true ] && [ -d "/mnt/c" ]; then
         echo ""
         print_status "WSL configuration modified - restart required to apply changes."
-        echo ""
         
         # Determine the correct WSL command to show
         WSL_COMMAND="wsl"
@@ -1071,14 +1070,20 @@ prompt_wsl_restart() {
             fi
         fi
         
-        echo -e "${YELLOW}To apply the changes, please restart WSL by running:${NC}"
-        echo -e "${BLUE}  wsl --shutdown${NC}"
+        echo ""
+        echo -e -n "${GREEN}Press Enter to shutdown WSL (you'll need to restart manually)...${NC}"
+        read
+        
+        print_status "Shutting down WSL..."
+        /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --shutdown" >/dev/null 2>&1
+        
+        echo ""
+        echo -e "${YELLOW}WSL has been shut down. To restart and apply changes, run:${NC}"
         echo -e "${BLUE}  $WSL_COMMAND${NC}"
         echo ""
-        echo -e "${YELLOW}Or simply close this terminal and open a new WSL session.${NC}"
-        echo ""
-        echo -e -n "${GREEN}Press Enter to continue...${NC}"
-        read
+        
+        # Exit gracefully since WSL is shutting down
+        exit 0
     fi
 }
 
