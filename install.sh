@@ -165,7 +165,8 @@ handle_wsl_default() {
         
         echo ""
         print_status "WSL environment detected!"
-        read -p "Do you want to set $CURRENT_DISTRO as your default WSL distribution? (Y/n): " wsl_default_choice
+        echo -e -n "${GREEN}Do you want to set $CURRENT_DISTRO as your default WSL distribution? (Y/n): ${NC}"
+        read wsl_default_choice
         if [[ "$wsl_default_choice" != "n" && "$wsl_default_choice" != "N" ]]; then
             SET_WSL_DEFAULT=true
             print_status "Will set $CURRENT_DISTRO as default WSL distribution after installation."
@@ -190,9 +191,9 @@ gather_user_input() {
         if [ -n "$WINDOWS_GIT_EMAIL" ]; then
             echo "  Email: $WINDOWS_GIT_EMAIL"
         fi
-        echo ""
         
-        read -p "Do you want to copy your Windows Git configuration to WSL? (Y/n): " copy_choice
+        echo -e -n "${GREEN}Do you want to copy your Windows Git configuration to WSL? (Y/n): ${NC}"
+        read copy_choice
         if [[ "$copy_choice" != "n" && "$copy_choice" != "N" ]]; then
             COPY_WINDOWS_GIT_CONFIG=true
             GIT_NAME="$WINDOWS_GIT_NAME"
@@ -209,12 +210,14 @@ gather_user_input() {
             if [ -z "$GIT_NAME" ]; then
                 # Use Windows Git name as default if available
                 if [ -n "$WINDOWS_GIT_NAME" ]; then
-                    read -p "Enter your git name [$WINDOWS_GIT_NAME]: " GIT_NAME
+                    echo -e -n "${GREEN}Enter your git name [$WINDOWS_GIT_NAME]: ${NC}"
+                    read GIT_NAME
                     if [ -z "$GIT_NAME" ]; then
                         GIT_NAME="$WINDOWS_GIT_NAME"
                     fi
                 else
-                    read -p "Enter your git name: " GIT_NAME
+                    echo -e -n "${GREEN}Enter your git name: ${NC}"
+                    read GIT_NAME
                 fi
                 
                 if [ -z "$GIT_NAME" ]; then
@@ -224,16 +227,19 @@ gather_user_input() {
         else
             current_name=$(git config --global user.name)
             echo "Git name already configured as: $current_name"
-            read -p "Do you want to change it? (y/n): " change_name
+            echo -e -n "${GREEN}Do you want to change it? (y/n): ${NC}"
+            read change_name
             if [[ "$change_name" == "y" ]]; then
                 CHANGE_GIT_CONFIG=true
                 if [ -n "$WINDOWS_GIT_NAME" ]; then
-                    read -p "Enter your git name [$WINDOWS_GIT_NAME]: " GIT_NAME
+                    echo -e -n "${GREEN}Enter your git name [$WINDOWS_GIT_NAME]: ${NC}"
+                    read GIT_NAME
                     if [ -z "$GIT_NAME" ]; then
                         GIT_NAME="$WINDOWS_GIT_NAME"
                     fi
                 else
-                    read -p "Enter your git name: " GIT_NAME
+                    echo -e -n "${GREEN}Enter your git name: ${NC}"
+                    read GIT_NAME
                 fi
             fi
         fi
@@ -243,12 +249,14 @@ gather_user_input() {
             if [ -z "$GIT_EMAIL" ]; then
                 # Use Windows Git email as default if available
                 if [ -n "$WINDOWS_GIT_EMAIL" ]; then
-                    read -p "Enter your Git email [$WINDOWS_GIT_EMAIL]: " GIT_EMAIL
+                    echo -e -n "${GREEN}Enter your Git email [$WINDOWS_GIT_EMAIL]: ${NC}"
+                    read GIT_EMAIL
                     if [ -z "$GIT_EMAIL" ]; then
                         GIT_EMAIL="$WINDOWS_GIT_EMAIL"
                     fi
                 else
-                    read -p "Enter your Git email: " GIT_EMAIL
+                    echo -e -n "${GREEN}Enter your Git email: ${NC}"
+                    read GIT_EMAIL
                 fi
                 
                 if [ -z "$GIT_EMAIL" ]; then
@@ -258,16 +266,19 @@ gather_user_input() {
         else
             current_email=$(git config --global user.email)
             echo "Git email already configured as: $current_email"
-            read -p "Do you want to change it? (y/n): " change_email
+            echo -e -n "${GREEN}Do you want to change it? (y/n): ${NC}"
+            read change_email
             if [[ "$change_email" == "y" ]]; then
                 CHANGE_GIT_CONFIG=true
                 if [ -n "$WINDOWS_GIT_EMAIL" ]; then
-                    read -p "Enter your Git email [$WINDOWS_GIT_EMAIL]: " GIT_EMAIL
+                    echo -e -n "${GREEN}Enter your Git email [$WINDOWS_GIT_EMAIL]: ${NC}"
+                    read GIT_EMAIL
                     if [ -z "$GIT_EMAIL" ]; then
                         GIT_EMAIL="$WINDOWS_GIT_EMAIL"
                     fi
                 else
-                    read -p "Enter your Git email: " GIT_EMAIL
+                    echo -e -n "${GREEN}Enter your Git email: ${NC}"
+                    read GIT_EMAIL
                 fi
             fi
         fi
@@ -275,15 +286,16 @@ gather_user_input() {
     
     # Git Credential Manager handling
     if [ "$WINDOWS_GIT_FOUND" = true ]; then
-        echo ""
         print_status "Git for Windows detected with credential manager support!"
-        read -p "Do you want to use Windows Git credentials in WSL? (Y/n): " use_windows_creds
+        echo -e -n "${GREEN}Do you want to use Windows Git credentials in WSL? (Y/n): ${NC}"
+        read use_windows_creds
         if [[ "$use_windows_creds" != "n" && "$use_windows_creds" != "N" ]]; then
             USE_WINDOWS_CREDENTIALS=true
             INSTALL_GCM=false  # Don't install Linux version
             print_status "Will configure WSL to use Windows Git Credential Manager."
         else
-            read -p "Do you want to install Git Credential Manager for Linux instead? (Y/n): " INSTALL_GCM_CHOICE
+            echo -e -n "${GREEN}Do you want to install Git Credential Manager for Linux instead? (Y/n): ${NC}"
+            read INSTALL_GCM_CHOICE
             if [[ "$INSTALL_GCM_CHOICE" == "n" || "$INSTALL_GCM_CHOICE" == "N" ]]; then
                 INSTALL_GCM=false
             fi
@@ -291,7 +303,8 @@ gather_user_input() {
     else
         # Original GCM question for when Windows Git is not found
         if [ "$INSTALL_GCM" = true ]; then
-            read -p "Do you want to install Git Credential Manager? (Y/n): " INSTALL_GCM_CHOICE
+            echo -e -n "${GREEN}Do you want to install Git Credential Manager? (Y/n): ${NC}"
+            read INSTALL_GCM_CHOICE
             if [[ "$INSTALL_GCM_CHOICE" == "n" || "$INSTALL_GCM_CHOICE" == "N" ]]; then
                 INSTALL_GCM=false
             fi
@@ -300,22 +313,24 @@ gather_user_input() {
     
     # Homebrew installation
     if [ "$INSTALL_HOMEBREW" = true ]; then
-        read -p "Do you want to install Homebrew? (Y/n): " INSTALL_HOMEBREW_CHOICE
+        echo -e -n "${GREEN}Do you want to install Homebrew? (Y/n): ${NC}"
+        read INSTALL_HOMEBREW_CHOICE
         if [[ "$INSTALL_HOMEBREW_CHOICE" == "n" || "$INSTALL_HOMEBREW_CHOICE" == "N" ]]; then
             INSTALL_HOMEBREW=false
         fi
     fi
     
     # pyenv installation
-    read -p "Do you want to install pyenv (Python version manager)? (Y/n): " INSTALL_PYENV_CHOICE
+    echo -e -n "${GREEN}Do you want to install pyenv (Python version manager)? (Y/n): ${NC}"
+    read INSTALL_PYENV_CHOICE
     if [[ "$INSTALL_PYENV_CHOICE" == "n" || "$INSTALL_PYENV_CHOICE" == "N" ]]; then
         INSTALL_PYENV=false
     else
         # Check if pyenv directory already exists
         if [ -d "$LINUX_HOME/.pyenv" ]; then
-            echo ""
             print_warning "pyenv directory already exists at $LINUX_HOME/.pyenv"
-            read -p "Do you want to remove the existing pyenv installation and reinstall? (Y/n): " remove_pyenv
+            echo -e -n "${GREEN}Do you want to remove the existing pyenv installation and reinstall? (Y/n): ${NC}"
+            read remove_pyenv
             if [[ "$remove_pyenv" == "n" || "$remove_pyenv" == "N" ]]; then
                 print_status "Will keep existing pyenv installation."
                 INSTALL_PYENV=false
@@ -327,15 +342,16 @@ gather_user_input() {
     fi
     
     # nvm installation
-    read -p "Do you want to install nvm (Node.js version manager)? (Y/n): " INSTALL_NVM_CHOICE
+    echo -e -n "${GREEN}Do you want to install nvm (Node.js version manager)? (Y/n): ${NC}"
+    read INSTALL_NVM_CHOICE
     if [[ "$INSTALL_NVM_CHOICE" == "n" || "$INSTALL_NVM_CHOICE" == "N" ]]; then
         INSTALL_NVM=false
     else
         # Check if nvm directory already exists
         if [ -d "$LINUX_HOME/.nvm" ]; then
-            echo ""
             print_warning "nvm directory already exists at $LINUX_HOME/.nvm"
-            read -p "Do you want to remove the existing nvm installation and reinstall? (Y/n): " remove_nvm
+            echo -e -n "${GREEN}Do you want to remove the existing nvm installation and reinstall? (Y/n): ${NC}"
+            read remove_nvm
             if [[ "$remove_nvm" == "n" || "$remove_nvm" == "N" ]]; then
                 print_status "Will keep existing nvm installation."
                 INSTALL_NVM=false
@@ -1023,7 +1039,8 @@ EOF
         echo -e "${YELLOW}To apply changes: Close WSL and double-click the batch file${NC}"
         echo ""
         
-        read -p "Press Enter to continue..."
+        echo -e -n "${GREEN}Press Enter to continue...${NC}"
+        read
     fi
 }
 
