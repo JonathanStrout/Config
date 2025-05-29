@@ -961,14 +961,17 @@ prompt_wsl_restart() {
         read -p "Would you like to restart WSL now? (Y/n): " RESTART_CHOICE
         
         if [[ "$RESTART_CHOICE" != "n" && "$RESTART_CHOICE" != "N" ]]; then
-            print_status "Attempting to restart WSL..."
-            echo "WSL will shutdown. Please start your distribution manually."
-            /mnt/c/Windows/System32/cmd.exe /c "wsl --shutdown" >/dev/null 2>&1
+            print_status "Restarting WSL and returning you to the terminal..."
+            print_status "WSL will shutdown, wait 3 seconds, then automatically restart."
+            
+            # Execute PowerShell command that handles the full restart sequence
+            /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --shutdown; Start-Sleep -Seconds 3; wsl" 2>/dev/null
             exit 0
         else
             print_warning "WSL restart skipped. Some changes won't take effect until you restart WSL."
             print_warning "To restart later, run this command in Windows PowerShell or Command Prompt:"
             echo "    wsl --shutdown"
+            echo "    (wait a few seconds, then run 'wsl' to re-enter)"
         fi
     fi
 }
