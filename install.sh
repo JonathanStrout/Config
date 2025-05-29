@@ -1034,14 +1034,26 @@ prompt_wsl_restart() {
         
         print_status "Restarting WSL..."
         
-        # Use PowerShell to shutdown and restart WSL
-        /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --shutdown" >/dev/null 2>&1
+        # Get Windows temp directory
+        WIN_TEMP=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %TEMP%' 2>/dev/null | tr -d '\r' | sed 's|\\|/|g')
+        WIN_TEMP="/mnt/c${WIN_TEMP#C:}"
         
-        # Wait a moment for shutdown to complete
-        sleep 2
+        # Create a temporary PowerShell script for restart
+        RESTART_SCRIPT="$WIN_TEMP/wsl-restart-$$.ps1"
+        cat > "$RESTART_SCRIPT" << 'EOF'
+Write-Host "Shutting down WSL..."
+wsl --shutdown
+Start-Sleep -Seconds 3
+Write-Host "Starting WSL..."
+wsl
+Remove-Item $MyInvocation.MyCommand.Path -Force
+EOF
         
-        # Start WSL again (this will return to the same terminal)
-        exec /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl"
+        # Execute the restart script
+        /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -ExecutionPolicy Bypass -File "$(echo "$RESTART_SCRIPT" | sed 's|/mnt/c|C:|' | sed 's|/|\\|g')"
+        
+        # This line shouldn't be reached, but just in case
+        exit 0
     fi
 }
 
