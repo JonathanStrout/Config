@@ -17,6 +17,7 @@ QUIET_MODE=true
 NON_INTERACTIVE=false
 INSTALL_HOMEBREW=true
 INSTALL_GCM=true
+INSTALL_GPG_PASS=true
 INSTALL_PYENV=true
 INSTALL_NVM=true
 GIT_NAME=""
@@ -162,6 +163,7 @@ detect_windows_git_config() {
 
 # Handle WSL default distribution setting
 handle_wsl_default() {
+    # Only ask WSL-related questions if we're actually in WSL
     if [ -d "/mnt/c" ] && [ "$NON_INTERACTIVE" = false ]; then
         # Get current distribution name
         CURRENT_DISTRO=$(cat /proc/version | grep -oE 'Ubuntu|Debian|Alpine|openSUSE|SUSE|Fedora|CentOS|RedHat' | head -n 1)
@@ -367,6 +369,19 @@ gather_user_input() {
         fi
     fi
 
+    # GPG and pass password manager installation (only if not using Windows credentials)
+    if [ "$USE_WINDOWS_CREDENTIALS" = false ]; then
+        echo -e -n "${GREEN}Do you want to install GPG and pass password manager? (for secure password storage beyond Git) (Y/n): ${NC}"
+        read INSTALL_GPG_PASS_CHOICE
+        if [[ "$INSTALL_GPG_PASS_CHOICE" == "n" || "$INSTALL_GPG_PASS_CHOICE" == "N" ]]; then
+            INSTALL_GPG_PASS=false
+        fi
+    else
+        # Skip GPG/pass if using Windows credentials
+        INSTALL_GPG_PASS=false
+        print_verbose "Skipping GPG/pass installation since using Windows Git Credential Manager."
+    fi
+
     print_status "Thank you! Installation will now begin..."
 }
 
@@ -512,6 +527,11 @@ configure_git() {
 
 # Install GPG and pass password manager
 install_gpg_and_pass() {
+    if [ "$INSTALL_GPG_PASS" = false ]; then
+        print_status "Skipping GPG and pass password manager installation."
+        return
+    fi
+    
     print_status "Installing GPG and pass password manager..."
     
     if [ "$QUIET_MODE" = true ]; then
@@ -657,7 +677,7 @@ configure_wsl() {
         
         # Fix path conflicts between Windows and WSL tools (only if not already present)
         if ! grep -q "command_not_found_handle" "$LINUX_HOME/.bashrc"; then
-            print_status "Adding protection against Windows/WSL path conflicts..."
+            print_verbose "Adding protection against Windows/WSL path conflicts..."
             cat << 'EOF' >> "$LINUX_HOME/.bashrc"
 # Safeguard against Windows PATH conflicts
 function command_not_found_handle() {
@@ -670,7 +690,7 @@ function command_not_found_handle() {
 }
 EOF
         fi
-        print_status "WSL-specific configurations completed."
+        print_verbose "WSL-specific configurations completed."
     else
         print_verbose "Not running in WSL, skipping WSL-specific configurations."
     fi
@@ -690,7 +710,7 @@ install_git_credential_manager() {
         # Configure Git to use the credential manager from Windows
         if [ -f "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe" ]; then
             # Create a wrapper script to handle spaces in the path properly
-            print_status "Creating Git Credential Manager wrapper script..."
+            print_verbose "Creating Git Credential Manager wrapper script..."
             mkdir -p "$HOME/bin"
             
             cat << 'EOF' > "$HOME/bin/git-credential-manager"
@@ -707,7 +727,7 @@ EOF
             
             # Configure credential helper to use the wrapper
             git config --global credential.helper "$HOME/bin/git-credential-manager"
-            print_status "Git configured to use Windows Git Credential Manager via wrapper script"
+            print_verbose "Git configured to use Windows Git Credential Manager via wrapper script"
         else
             print_warning "Git for Windows found but git-credential-manager.exe not found"
             print_warning "You may need to update Git for Windows to get credential manager support"
@@ -1017,7 +1037,7 @@ set_wsl_default() {
         
         # Use Windows PowerShell to set the default
         if /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --set-default $WSL_DISTRO_NAME" >/dev/null 2>&1; then
-            print_status "$WSL_DISTRO_NAME set as default WSL distribution."
+            print_verbose "$WSL_DISTRO_NAME set as default WSL distribution."
         else
             print_warning "Failed to set default WSL distribution. You can manually set it with: wsl --set-default $WSL_DISTRO_NAME"
         fi
@@ -1029,31 +1049,36 @@ prompt_wsl_restart() {
     if [ "$WSL_CONF_MODIFIED" = true ] && [ -d "/mnt/c" ]; then
         echo ""
         print_status "WSL configuration modified - restart required to apply changes."
-        echo -e -n "${GREEN}Press Enter to restart WSL and apply changes...${NC}"
+        echo ""
+        
+        # Determine the correct WSL command to show
+        WSL_COMMAND="wsl"
+        
+        # If user didn't choose to set this as default, check if we need to specify the distribution
+        if [ "$SET_WSL_DEFAULT" = false ]; then
+            # Get current distribution name from WSL
+            CURRENT_WSL_DISTRO=$(cat /proc/version | grep -oE 'Ubuntu|Debian|Alpine|openSUSE|SUSE|Fedora|CentOS|RedHat' | head -n 1)
+            if [ -z "$CURRENT_WSL_DISTRO" ]; then
+                CURRENT_WSL_DISTRO="Ubuntu"  # Default fallback
+            fi
+            
+            # Check if this distribution is currently the default
+            DEFAULT_DISTRO=$(/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "(wsl -l | Where-Object { $_ -match '\(Default\)' }) -replace '.*?([A-Za-z0-9-]+).*', '$1'" 2>/dev/null | tr -d '\r' | head -n 1)
+            
+            # If this distribution is not the default, specify it in the command
+            if [ "$DEFAULT_DISTRO" != "$CURRENT_WSL_DISTRO" ]; then
+                WSL_COMMAND="wsl -d $CURRENT_WSL_DISTRO"
+            fi
+        fi
+        
+        echo -e "${YELLOW}To apply the changes, please restart WSL by running:${NC}"
+        echo -e "${BLUE}  wsl --shutdown${NC}"
+        echo -e "${BLUE}  $WSL_COMMAND${NC}"
+        echo ""
+        echo -e "${YELLOW}Or simply close this terminal and open a new WSL session.${NC}"
+        echo ""
+        echo -e -n "${GREEN}Press Enter to continue...${NC}"
         read
-        
-        print_status "Restarting WSL..."
-        
-        # Get Windows temp directory
-        WIN_TEMP=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %TEMP%' 2>/dev/null | tr -d '\r' | sed 's|\\|/|g')
-        WIN_TEMP="/mnt/c${WIN_TEMP#C:}"
-        
-        # Create a temporary PowerShell script for restart
-        RESTART_SCRIPT="$WIN_TEMP/wsl-restart-$$.ps1"
-        cat > "$RESTART_SCRIPT" << 'EOF'
-Write-Host "Shutting down WSL..."
-wsl --shutdown
-Start-Sleep -Seconds 3
-Write-Host "Starting WSL..."
-wsl
-Remove-Item $MyInvocation.MyCommand.Path -Force
-EOF
-        
-        # Execute the restart script
-        /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -ExecutionPolicy Bypass -File "$(echo "$RESTART_SCRIPT" | sed 's|/mnt/c|C:|' | sed 's|/|\\|g')"
-        
-        # This line shouldn't be reached, but just in case
-        exit 0
     fi
 }
 
@@ -1072,7 +1097,10 @@ print_summary() {
 
     echo -e "${GREEN}Installed components:${NC}"
     echo -e "- Build essentials & Git"
-    echo -e "- GPG and pass password manager"
+    
+    if [ "$INSTALL_GPG_PASS" = true ]; then
+        echo -e "- GPG and pass password manager"
+    fi
     
     if [ "$INSTALL_PYENV" = true ]; then
         echo -e "- pyenv (Python version manager)"
