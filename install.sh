@@ -1047,7 +1047,7 @@ set_wsl_default() {
 # Ask user about WSL restart if needed
 prompt_wsl_restart() {
     if [ "$WSL_CONF_MODIFIED" = true ] && [ -d "/mnt/c" ]; then
-        echo ""
+        echo
         print_status "WSL configuration modified - restart required to apply changes."
         
         # Determine the correct WSL command to show
@@ -1070,14 +1070,12 @@ prompt_wsl_restart() {
             fi
         fi
         
-        echo ""
-        echo -e -n "${GREEN}Press Enter to shutdown WSL (you'll need to restart manually)...${NC}"
-        read
-        
-        echo ""
+        echo
         echo -e "${YELLOW}After WSL shuts down, restart and apply changes by running:${NC}"
         echo -e "${BLUE}  $WSL_COMMAND${NC}"
-        echo ""
+        echo
+        echo -e -n "${GREEN}Press Enter to shutdown WSL (you'll need to restart manually)...${NC}"
+        read
         
         print_status "Shutting down WSL..."
         /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --shutdown" >/dev/null 2>&1
@@ -1162,8 +1160,8 @@ main() {
     install_nvm
     verify_installations
     set_wsl_default
-    prompt_wsl_restart
     print_summary
+    prompt_wsl_restart
 }
 
 # Run the main function
