@@ -582,9 +582,25 @@ install_git_credential_manager() {
         
         # Configure Git to use the credential manager from Windows
         if [ -f "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe" ]; then
-            # Configure credential helper to use Windows GCM
-            git config --global credential.helper '"/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe"'
-            print_status "Git configured to use Windows Git Credential Manager"
+            # Create a wrapper script to handle spaces in the path properly
+            print_status "Creating Git Credential Manager wrapper script..."
+            mkdir -p "$HOME/bin"
+            
+            cat << 'EOF' > "$HOME/bin/git-credential-manager"
+#!/bin/bash
+exec "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe" "$@"
+EOF
+            
+            chmod +x "$HOME/bin/git-credential-manager"
+            
+            # Add ~/bin to PATH if not already there
+            if ! grep -q 'export PATH="$HOME/bin:$PATH"' "$HOME/.bashrc"; then
+                echo 'export PATH="$HOME/bin:$PATH" # Git credential manager wrapper' >> "$HOME/.bashrc"
+            fi
+            
+            # Configure credential helper to use the wrapper
+            git config --global credential.helper "$HOME/bin/git-credential-manager"
+            print_status "Git configured to use Windows Git Credential Manager via wrapper script"
         else
             print_warning "Git for Windows found but git-credential-manager.exe not found"
             print_warning "You may need to update Git for Windows to get credential manager support"
