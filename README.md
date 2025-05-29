@@ -16,6 +16,11 @@ This script sets up a complete development environment by:
 - Setting up Homebrew
 - Installing pyenv for Python version management
 - Installing nvm for Node.js version management
+- Automatically adding windows tools to your WSL path, including:
+  - C:\Windows Folder
+  - Microsoft VS Code
+  - Cursor editor
+  - Docker Desktop
 
 The script will ask for your Git name, email, and which components you want to install before proceeding.
 

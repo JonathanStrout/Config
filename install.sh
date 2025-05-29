@@ -623,6 +623,11 @@ configure_wsl() {
             echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor/resources/app/bin\" # Adds cursor folder to path" >> "$LINUX_HOME/.bashrc"
         fi    
 
+        # Add Docker Desktop for Windows CLI to PATH if present
+        if [ -d "/mnt/c/Program Files/Docker/Docker/resources/bin" ]; then
+            echo "export PATH=\"\$PATH:/mnt/c/Program Files/Docker/Docker/resources/bin\" # Adds Docker Desktop CLI to path" >> "$LINUX_HOME/.bashrc"
+        fi    
+
         print_status "Configuring /etc/wsl.conf..."
         if ! grep -q "appendWindowsPath = false" /etc/wsl.conf; then
             sudo bash -c 'echo -e "\n[interop]\nappendWindowsPath=false" >> /etc/wsl.conf'
