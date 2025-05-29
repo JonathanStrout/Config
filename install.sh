@@ -1074,13 +1074,13 @@ prompt_wsl_restart() {
         echo -e -n "${GREEN}Press Enter to shutdown WSL (you'll need to restart manually)...${NC}"
         read
         
-        print_status "Shutting down WSL..."
-        /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --shutdown" >/dev/null 2>&1
-        
         echo ""
-        echo -e "${YELLOW}WSL has been shut down. To restart and apply changes, run:${NC}"
+        echo -e "${YELLOW}After WSL shuts down, restart and apply changes by running:${NC}"
         echo -e "${BLUE}  $WSL_COMMAND${NC}"
         echo ""
+        
+        print_status "Shutting down WSL..."
+        /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --shutdown" >/dev/null 2>&1
         
         # Exit gracefully since WSL is shutting down
         exit 0
