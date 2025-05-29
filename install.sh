@@ -957,7 +957,7 @@ set_wsl_default() {
 prompt_wsl_restart() {
     if [ "$WSL_CONF_MODIFIED" = true ] && [ -d "/mnt/c" ]; then
         echo ""
-        print_status "WSL configuration has been modified and requires a restart to take effect."
+        print_status "WSL configuration modified - restart required to apply changes."
         
         # Create a restart batch file on the Windows desktop
         WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')
@@ -966,35 +966,21 @@ prompt_wsl_restart() {
         
         cat > "$RESTART_BATCH" << 'EOF'
 @echo off
-echo Restarting WSL...
+echo Restarting WSL to apply configuration changes...
 echo.
-echo Shutting down WSL...
 wsl --shutdown
-echo.
-echo Waiting 3 seconds for WSL to fully shutdown...
+echo Waiting for WSL to shutdown...
 timeout /t 3 /nobreak >nul
-echo.
 echo Starting WSL...
 wsl
-echo.
-echo WSL restarted successfully!
-pause
+del "%~f0"
 EOF
         
-        print_status "Created restart batch file: Restart-WSL.bat on your Desktop"
-        echo ""
-        echo -e "${YELLOW}To restart WSL and apply all changes:${NC}"
-        echo -e "1. ${GREEN}Close this WSL terminal${NC}"
-        echo -e "2. ${GREEN}Double-click 'Restart-WSL.bat' on your Desktop${NC}"
-        echo -e "   ${BLUE}(Or run it from PowerShell/Command Prompt)${NC}"
-        echo ""
-        echo -e "${YELLOW}Alternative manual method:${NC}"
-        echo -e "Run these commands in Windows PowerShell or Command Prompt:"
-        echo -e "  ${BLUE}wsl --shutdown${NC}"
-        echo -e "  ${BLUE}wsl${NC}"
+        print_status "Created 'Restart-WSL.bat' on your Desktop"
+        echo -e "${YELLOW}To apply changes: Close WSL and double-click the batch file${NC}"
         echo ""
         
-        read -p "Press Enter to continue and finish the installation..."
+        read -p "Press Enter to continue..."
     fi
 }
 
@@ -1007,18 +993,12 @@ print_summary() {
 
     echo
     echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}      Installation complete!           ${NC}"
+    echo -e "${GREEN}      Installation Complete!           ${NC}"
     echo -e "${GREEN}========================================${NC}"
     echo
 
-    echo -e "To apply all changes, please run:"
-    echo -e "  ${YELLOW}source ~/.bashrc${NC}"
-    echo
-    echo -e "Or restart your terminal."
-    echo
     echo -e "${GREEN}Installed components:${NC}"
-    echo -e "- Build essentials"
-    echo -e "- Git (configured with your identity)"
+    echo -e "- Build essentials & Git"
     echo -e "- GPG and pass password manager"
     
     if [ "$INSTALL_PYENV" = true ]; then
@@ -1030,13 +1010,13 @@ print_summary() {
     fi
 
     if [ "$INSTALL_HOMEBREW" = true ]; then
-        echo -e "- Homebrew (Package manager)"
+        echo -e "- Homebrew package manager"
     fi
 
     if [ "$USE_WINDOWS_CREDENTIALS" = true ]; then
-        echo -e "- Git Credential Manager (using Windows credentials)"
+        echo -e "- Git Credential Manager (Windows integration)"
     elif [ "$INSTALL_GCM" = true ]; then
-        echo -e "- Git Credential Manager (Linux version)"
+        echo -e "- Git Credential Manager (Linux)"
     fi
 
     if [ -d "/mnt/c" ]; then
@@ -1044,13 +1024,18 @@ print_summary() {
     fi
 
     echo
-    if [ "$INSTALL_PYENV" = true ] && [ "$INSTALL_NVM" = true ]; then
-        echo -e "${YELLOW}Note:${NC} You can now install Python with: pyenv install <version>"
-        echo -e "      And Node.js with: nvm install <version>"
-    elif [ "$INSTALL_PYENV" = true ]; then
-        echo -e "${YELLOW}Note:${NC} You can now install Python with: pyenv install <version>"
-    elif [ "$INSTALL_NVM" = true ]; then
-        echo -e "${YELLOW}Note:${NC} You can now install Node.js with: nvm install <version>"
+    if [ "$WSL_CONF_MODIFIED" != true ]; then
+        echo -e "${YELLOW}Run 'source ~/.bashrc' or restart your terminal to apply changes.${NC}"
+    fi
+    
+    if [ "$INSTALL_PYENV" = true ] || [ "$INSTALL_NVM" = true ]; then
+        echo -e "${BLUE}Next steps:${NC}"
+        if [ "$INSTALL_PYENV" = true ]; then
+            echo -e "  pyenv install <version>  # Install Python"
+        fi
+        if [ "$INSTALL_NVM" = true ]; then
+            echo -e "  nvm install <version>    # Install Node.js"
+        fi
     fi
 }
 
