@@ -564,28 +564,31 @@ configure_wsl() {
         print_status "WSL environment detected. Configuring WSL-specific settings..."
         cd /mnt/c && WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' | tr -d '\r') && cd ~
 
-        echo >> "$LINUX_HOME/.bashrc"
-        echo "# WSL-specific configuration" >> "$LINUX_HOME/.bashrc"
-        echo "export WIN_USERNAME=\"$WIN_USERNAME\" # Windows username" >> "$LINUX_HOME/.bashrc"
-        echo 'export PATH="$PATH:/mnt/c/Windows" # Adds Windows folder to path' >> "$LINUX_HOME/.bashrc"
+        # Only add WSL configuration if not already present
+        if ! grep -q "WSL-specific configuration" "$LINUX_HOME/.bashrc"; then
+            echo >> "$LINUX_HOME/.bashrc"
+            echo "# WSL-specific configuration" >> "$LINUX_HOME/.bashrc"
+            echo "export WIN_USERNAME=\"$WIN_USERNAME\" # Windows username" >> "$LINUX_HOME/.bashrc"
+            echo 'export PATH="$PATH:/mnt/c/Windows" # Adds Windows folder to path' >> "$LINUX_HOME/.bashrc"
 
-        # Check for Git for Windows and add to PATH if present
-        if [ -d "/mnt/c/Program Files/Git/mingw64/bin" ]; then
-            echo 'export PATH="$PATH:/mnt/c/Program Files/Git/mingw64/bin" # Adds Git for Windows to path' >> "$LINUX_HOME/.bashrc"
+            # Check for Git for Windows and add to PATH if present
+            if [ -d "/mnt/c/Program Files/Git/mingw64/bin" ]; then
+                echo 'export PATH="$PATH:/mnt/c/Program Files/Git/mingw64/bin" # Adds Git for Windows to path' >> "$LINUX_HOME/.bashrc"
+            fi
+
+            if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code" ]; then
+                echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code/bin\" # Adds vscode folder to path" >> "$LINUX_HOME/.bashrc"
+            fi    
+
+            if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor" ]; then
+                echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor/resources/app/bin\" # Adds cursor folder to path" >> "$LINUX_HOME/.bashrc"
+            fi    
+
+            # Add Docker Desktop for Windows CLI to PATH if present
+            if [ -d "/mnt/c/Program Files/Docker/Docker/resources/bin" ]; then
+                echo 'export PATH="$PATH:/mnt/c/Program Files/Docker/Docker/resources/bin" # Adds Docker Desktop CLI to path' >> "$LINUX_HOME/.bashrc"
+            fi    
         fi
-
-        if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code" ]; then
-            echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code/bin\" # Adds vscode folder to path" >> "$LINUX_HOME/.bashrc"
-        fi    
-
-        if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor" ]; then
-            echo "export PATH=\"\$PATH:/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/cursor/resources/app/bin\" # Adds cursor folder to path" >> "$LINUX_HOME/.bashrc"
-        fi    
-
-        # Add Docker Desktop for Windows CLI to PATH if present
-        if [ -d "/mnt/c/Program Files/Docker/Docker/resources/bin" ]; then
-            echo 'export PATH="$PATH:/mnt/c/Program Files/Docker/Docker/resources/bin" # Adds Docker Desktop CLI to path' >> "$LINUX_HOME/.bashrc"
-        fi    
 
         print_status "Configuring /etc/wsl.conf..."
         if ! grep -q "appendWindowsPath = false" /etc/wsl.conf; then
@@ -594,9 +597,10 @@ configure_wsl() {
             WSL_CONF_MODIFIED=true
         fi
         
-        # Fix path conflicts between Windows and WSL tools
-        print_status "Adding protection against Windows/WSL path conflicts..."
-        cat << 'EOF' >> "$LINUX_HOME/.bashrc"
+        # Fix path conflicts between Windows and WSL tools (only if not already present)
+        if ! grep -q "command_not_found_handle" "$LINUX_HOME/.bashrc"; then
+            print_status "Adding protection against Windows/WSL path conflicts..."
+            cat << 'EOF' >> "$LINUX_HOME/.bashrc"
 # Safeguard against Windows PATH conflicts
 function command_not_found_handle() {
   if [ -x /usr/lib/command-not-found ]; then
@@ -607,6 +611,7 @@ function command_not_found_handle() {
   fi
 }
 EOF
+        fi
         print_status "WSL-specific configurations completed."
     else
         print_verbose "Not running in WSL, skipping WSL-specific configurations."
@@ -780,10 +785,12 @@ install_homebrew() {
     fi
     check_success "Failed to install Homebrew"
 
-    # Add Homebrew to PATH
-    print_status "Adding Homebrew to PATH..."
-    echo >> ~/.bashrc
-    echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+    # Add Homebrew to PATH (only if not already present)
+    if ! grep -q "/home/linuxbrew/.linuxbrew/bin/brew shellenv" ~/.bashrc; then
+        print_status "Adding Homebrew to PATH..."
+        echo >> ~/.bashrc
+        echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+    fi
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
     # Install GCC via Homebrew
@@ -803,13 +810,22 @@ install_pyenv() {
         return
     fi
     
-    print_status "Installing pyenv and pyenv-virtualenv..."
-    
-    # Remove existing pyenv if found
+    # Check if pyenv directory already exists
     if [ -d "$LINUX_HOME/.pyenv" ]; then
-        print_warning "Removing existing pyenv directory..."
+        echo ""
+        print_warning "pyenv directory already exists at $LINUX_HOME/.pyenv"
+        if [ "$NON_INTERACTIVE" = false ]; then
+            read -p "Do you want to remove the existing pyenv installation and reinstall? (y/N): " remove_pyenv
+            if [[ "$remove_pyenv" != "y" && "$remove_pyenv" != "Y" ]]; then
+                print_status "Keeping existing pyenv installation."
+                return
+            fi
+        fi
+        print_status "Removing existing pyenv directory..."
         rm -rf "$LINUX_HOME/.pyenv"
     fi
+    
+    print_status "Installing pyenv and pyenv-virtualenv..."
 
     # Install pyenv
     if [ "$QUIET_MODE" = true ]; then
@@ -819,15 +835,17 @@ install_pyenv() {
     fi
     check_success "Failed to clone pyenv repository"
 
-    # Add pyenv to PATH and initialize
-    print_verbose "Setting up pyenv in ~/.bashrc..."
-    cat << 'EOF' >> "$LINUX_HOME/.bashrc"
+    # Add pyenv to PATH and initialize (only if not already present)
+    if ! grep -q "PYENV_ROOT" "$LINUX_HOME/.bashrc"; then
+        print_verbose "Setting up pyenv in ~/.bashrc..."
+        cat << 'EOF' >> "$LINUX_HOME/.bashrc"
 
 # pyenv configuration
 export PYENV_ROOT="$HOME/.pyenv"
 command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 EOF
+    fi
 
     # For the current shell session
     export PYENV_ROOT="$LINUX_HOME/.pyenv"
@@ -842,10 +860,12 @@ EOF
     fi
     check_success "Failed to install pyenv-virtualenv plugin"
 
-    # Add pyenv-virtualenv initialization to ~/.bashrc
-    cat << 'EOF' >> "$LINUX_HOME/.bashrc"
+    # Add pyenv-virtualenv initialization to ~/.bashrc (only if not already present)
+    if ! grep -q "pyenv virtualenv-init" "$LINUX_HOME/.bashrc"; then
+        cat << 'EOF' >> "$LINUX_HOME/.bashrc"
 eval "$(pyenv virtualenv-init -)"
 EOF
+    fi
     
     print_status "pyenv and pyenv-virtualenv installed successfully."
 }
@@ -858,13 +878,22 @@ install_nvm() {
         return
     fi
     
-    print_status "Installing nvm..."
-    
-    # Remove existing nvm if found
+    # Check if nvm directory already exists
     if [ -d "$LINUX_HOME/.nvm" ]; then
-        print_warning "Removing existing nvm directory..."
+        echo ""
+        print_warning "nvm directory already exists at $LINUX_HOME/.nvm"
+        if [ "$NON_INTERACTIVE" = false ]; then
+            read -p "Do you want to remove the existing nvm installation and reinstall? (y/N): " remove_nvm
+            if [[ "$remove_nvm" != "y" && "$remove_nvm" != "Y" ]]; then
+                print_status "Keeping existing nvm installation."
+                return
+            fi
+        fi
+        print_status "Removing existing nvm directory..."
         rm -rf "$LINUX_HOME/.nvm"
     fi
+    
+    print_status "Installing nvm..."
 
     # Get latest nvm version
     NVM_VERSION=$(curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep 'tag_name' | cut -d'"' -f4)
@@ -883,14 +912,16 @@ install_nvm() {
     fi
     check_success "Failed to install nvm"
 
-    # Add nvm configuration to bashrc
-    cat << EOF >> "$LINUX_HOME/.bashrc"
+    # Add nvm configuration to bashrc (only if not already present)
+    if ! grep -q "NVM_DIR" "$LINUX_HOME/.bashrc"; then
+        cat << EOF >> "$LINUX_HOME/.bashrc"
 
 # nvm configuration
 export NVM_DIR="$LINUX_HOME/.nvm"
 [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "\$NVM_DIR/bash_completion" ] && \. "\$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 EOF
+    fi
 
     # Add nvm initialization to current session
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 
