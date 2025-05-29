@@ -964,8 +964,28 @@ prompt_wsl_restart() {
             print_status "Restarting WSL and returning you to the terminal..."
             print_status "WSL will shutdown, wait 3 seconds, then automatically restart."
             
-            # Execute PowerShell command that handles the full restart sequence
-            /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --shutdown; Start-Sleep -Seconds 3; wsl" 2>/dev/null
+            # Create a temporary PowerShell script for the restart sequence
+            WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')
+            RESTART_SCRIPT="/mnt/c/Users/$WIN_USERNAME/temp_wsl_restart.ps1"
+            
+            cat > "$RESTART_SCRIPT" << 'EOF'
+# WSL Restart Script
+Write-Host "Shutting down WSL..."
+wsl --shutdown
+
+Write-Host "Waiting 3 seconds for WSL to fully shutdown..."
+Start-Sleep -Seconds 3
+
+Write-Host "Starting WSL..."
+wsl
+EOF
+            
+            # Execute the PowerShell script and remove it
+            /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -ExecutionPolicy Bypass -File "$RESTART_SCRIPT"
+            
+            # Clean up the temporary script (this may not execute if WSL shuts down first)
+            rm -f "$RESTART_SCRIPT" 2>/dev/null || true
+            
             exit 0
         else
             print_warning "WSL restart skipped. Some changes won't take effect until you restart WSL."
