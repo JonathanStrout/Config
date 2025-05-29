@@ -16,11 +16,15 @@ QUIET_MODE=true
 NON_INTERACTIVE=false
 INSTALL_HOMEBREW=true
 INSTALL_GCM=true
+INSTALL_PYENV=true
+INSTALL_NVM=true
 GIT_NAME=""
 GIT_EMAIL=""
 CHANGE_GIT_CONFIG=false
 INSTALL_HOMEBREW_CHOICE=""
 INSTALL_GCM_CHOICE=""
+INSTALL_PYENV_CHOICE=""
+INSTALL_NVM_CHOICE=""
 WSL_CONF_MODIFIED=false
 WINDOWS_GIT_FOUND=false
 WINDOWS_GIT_CONFIG_EXISTS=false
@@ -28,6 +32,7 @@ WINDOWS_GIT_NAME=""
 WINDOWS_GIT_EMAIL=""
 COPY_WINDOWS_GIT_CONFIG=false
 USE_WINDOWS_CREDENTIALS=false
+SET_WSL_DEFAULT=false
 
 
 # Function to print status messages
@@ -143,6 +148,25 @@ detect_windows_git_config() {
         # Check if Git for Windows exists (for credential manager detection)
         if [ -d "/mnt/c/Program Files/Git/mingw64/bin" ]; then
             WINDOWS_GIT_FOUND=true
+        fi
+    fi
+}
+
+# Handle WSL default distribution setting
+handle_wsl_default() {
+    if [ -d "/mnt/c" ] && [ "$NON_INTERACTIVE" = false ]; then
+        # Get current distribution name
+        CURRENT_DISTRO=$(cat /proc/version | grep -oE 'Ubuntu|Debian|Alpine|openSUSE|SUSE|Fedora|CentOS|RedHat' | head -n 1)
+        if [ -z "$CURRENT_DISTRO" ]; then
+            CURRENT_DISTRO="this distribution"
+        fi
+        
+        echo ""
+        print_status "WSL environment detected!"
+        read -p "Do you want to set $CURRENT_DISTRO as your default WSL distribution? (Y/n): " wsl_default_choice
+        if [[ "$wsl_default_choice" != "n" && "$wsl_default_choice" != "N" ]]; then
+            SET_WSL_DEFAULT=true
+            print_status "Will set $CURRENT_DISTRO as default WSL distribution after installation."
         fi
     fi
 }
@@ -279,6 +303,18 @@ gather_user_input() {
             INSTALL_HOMEBREW=false
         fi
     fi
+    
+    # pyenv installation
+    read -p "Do you want to install pyenv (Python version manager)? (Y/n): " INSTALL_PYENV_CHOICE
+    if [[ "$INSTALL_PYENV_CHOICE" == "n" || "$INSTALL_PYENV_CHOICE" == "N" ]]; then
+        INSTALL_PYENV=false
+    fi
+    
+    # nvm installation
+    read -p "Do you want to install nvm (Node.js version manager)? (Y/n): " INSTALL_NVM_CHOICE
+    if [[ "$INSTALL_NVM_CHOICE" == "n" || "$INSTALL_NVM_CHOICE" == "N" ]]; then
+        INSTALL_NVM=false
+    fi
 
     print_status "Thank you! Installation will now begin..."
 }
@@ -286,11 +322,19 @@ gather_user_input() {
 # Request sudo privileges
 setup_sudo() {
     print_status "Requesting sudo privileges..."
-    if sudo -v; then
-        print_status "Sudo session established."
+    
+    # Try to get sudo without password first
+    if sudo -n true 2>/dev/null; then
+        print_status "Sudo session already established."
     else
-        print_error "Sudo required but not available. Exiting..."
-        exit 1
+        # Need to prompt for password
+        echo -e "${GREEN}[+] Please enter your sudo password to continue:${NC}"
+        if sudo -v; then
+            print_status "Sudo session established."
+        else
+            print_error "Sudo required but authentication failed. Exiting..."
+            exit 1
+        fi
     fi
 
     # Keep sudo alive for the necessary commands
@@ -754,6 +798,11 @@ install_homebrew() {
 
 # Install pyenv
 install_pyenv() {
+    if [ "$INSTALL_PYENV" = false ]; then
+        print_status "Skipping pyenv installation."
+        return
+    fi
+    
     print_status "Installing pyenv and pyenv-virtualenv..."
     
     # Remove existing pyenv if found
@@ -804,6 +853,11 @@ EOF
 
 # Install nvm
 install_nvm() {
+    if [ "$INSTALL_NVM" = false ]; then
+        print_status "Skipping nvm installation."
+        return
+    fi
+    
     print_status "Installing nvm..."
     
     # Remove existing nvm if found
@@ -850,23 +904,52 @@ verify_installations() {
     print_status "Verifying installations..."
     
     # Verify pyenv
-    if command -v pyenv >/dev/null; then
-        print_status "pyenv installation verified."
-        if [ "$QUIET_MODE" = false ]; then
-            pyenv --version
+    if [ "$INSTALL_PYENV" = true ]; then
+        if command -v pyenv >/dev/null; then
+            print_status "pyenv installation verified."
+            if [ "$QUIET_MODE" = false ]; then
+                pyenv --version
+            fi
+        else
+            print_warning "pyenv not found in PATH for current session."
         fi
-    else
-        print_warning "pyenv not found in PATH for current session."
     fi
 
     # Verify nvm
-    if [ -f "$NVM_DIR/nvm.sh" ]; then
-        print_status "nvm installation verified."
-        if [ "$QUIET_MODE" = false ]; then
-            nvm --version
+    if [ "$INSTALL_NVM" = true ]; then
+        if [ -f "$NVM_DIR/nvm.sh" ]; then
+            print_status "nvm installation verified."
+            if [ "$QUIET_MODE" = false ]; then
+                nvm --version
+            fi
+        else
+            print_warning "nvm not found in PATH for current session."
         fi
-    else
-        print_warning "nvm not found in PATH for current session."
+    fi
+}
+
+# Set WSL default distribution
+set_wsl_default() {
+    if [ "$SET_WSL_DEFAULT" = true ] && [ -d "/mnt/c" ]; then
+        # Get the current WSL distribution name
+        DISTRO_NAME=$(cat /etc/os-release | grep "^ID=" | cut -d'=' -f2 | tr -d '"')
+        
+        # Convert to proper WSL distribution name
+        case "$DISTRO_NAME" in
+            ubuntu) WSL_DISTRO_NAME="Ubuntu" ;;
+            debian) WSL_DISTRO_NAME="Debian" ;;
+            opensuse*) WSL_DISTRO_NAME="openSUSE-Leap-15.4" ;; # This may vary
+            *) WSL_DISTRO_NAME="Ubuntu" ;; # Default fallback
+        esac
+        
+        print_status "Setting $WSL_DISTRO_NAME as default WSL distribution..."
+        
+        # Use Windows PowerShell to set the default
+        if /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "wsl --set-default $WSL_DISTRO_NAME" >/dev/null 2>&1; then
+            print_status "$WSL_DISTRO_NAME set as default WSL distribution."
+        else
+            print_warning "Failed to set default WSL distribution. You can manually set it with: wsl --set-default $WSL_DISTRO_NAME"
+        fi
     fi
 }
 
@@ -912,8 +995,14 @@ print_summary() {
     echo -e "- Build essentials"
     echo -e "- Git (configured with your identity)"
     echo -e "- GPG and pass password manager"
-    echo -e "- pyenv (Python version manager)"
-    echo -e "- nvm (Node.js version manager)"
+    
+    if [ "$INSTALL_PYENV" = true ]; then
+        echo -e "- pyenv (Python version manager)"
+    fi
+    
+    if [ "$INSTALL_NVM" = true ]; then
+        echo -e "- nvm (Node.js version manager)"
+    fi
 
     if [ "$INSTALL_HOMEBREW" = true ]; then
         echo -e "- Homebrew (Package manager)"
@@ -930,14 +1019,21 @@ print_summary() {
     fi
 
     echo
-    echo -e "${YELLOW}Note:${NC} You can now install Python with: pyenv install <version>"
-    echo -e "      And Node.js with: nvm install <version>"
+    if [ "$INSTALL_PYENV" = true ] && [ "$INSTALL_NVM" = true ]; then
+        echo -e "${YELLOW}Note:${NC} You can now install Python with: pyenv install <version>"
+        echo -e "      And Node.js with: nvm install <version>"
+    elif [ "$INSTALL_PYENV" = true ]; then
+        echo -e "${YELLOW}Note:${NC} You can now install Python with: pyenv install <version>"
+    elif [ "$INSTALL_NVM" = true ]; then
+        echo -e "${YELLOW}Note:${NC} You can now install Node.js with: nvm install <version>"
+    fi
 }
 
 # Main function to orchestrate the installation
 main() {
     parse_args "$@"
     detect_windows_git_config
+    handle_wsl_default
     gather_user_input
     setup_sudo
     install_system_packages
@@ -949,6 +1045,7 @@ main() {
     install_pyenv
     install_nvm
     verify_installations
+    set_wsl_default
     prompt_wsl_restart
     print_summary
 }
