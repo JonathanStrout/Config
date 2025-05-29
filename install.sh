@@ -707,27 +707,15 @@ install_git_credential_manager() {
     if [ "$USE_WINDOWS_CREDENTIALS" = true ]; then
         print_status "Configuring WSL to use Windows Git Credential Manager..."
         
-        # Configure Git to use the credential manager from Windows
+        # Configure Git to use the credential manager from Windows with escaped path
         if [ -f "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe" ]; then
-            # Create a wrapper script to handle spaces in the path properly
-            print_verbose "Creating Git Credential Manager wrapper script..."
-            mkdir -p "$HOME/bin"
+            print_verbose "Configuring Git to use Windows Git Credential Manager directly..."
             
-            cat << 'EOF' > "$HOME/bin/git-credential-manager"
-#!/bin/bash
-exec "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe" "$@"
-EOF
+            # Use escaped path to handle spaces properly
+            git config --global credential.helper "/mnt/c/Program\ Files/Git/mingw64/bin/git-credential-manager.exe"
+            check_success "Failed to configure Git Credential Manager"
             
-            chmod +x "$HOME/bin/git-credential-manager"
-            
-            # Add ~/bin to PATH if not already there
-            if ! grep -q 'export PATH="$HOME/bin:$PATH"' "$HOME/.bashrc"; then
-                echo 'export PATH="$HOME/bin:$PATH" # Git credential manager wrapper' >> "$HOME/.bashrc"
-            fi
-            
-            # Configure credential helper to use the wrapper
-            git config --global credential.helper "$HOME/bin/git-credential-manager"
-            print_verbose "Git configured to use Windows Git Credential Manager via wrapper script"
+            print_status "Git configured to use Windows Git Credential Manager"
         else
             print_warning "Git for Windows found but git-credential-manager.exe not found"
             print_warning "You may need to update Git for Windows to get credential manager support"
