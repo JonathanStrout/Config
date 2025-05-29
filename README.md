@@ -10,9 +10,10 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/JonathanStrout/Config/ma
 
 This script sets up a complete development environment by:
 
-- Setting up Git with your name and email
+- **Smart Git Setup**: Automatically detects existing Windows Git configuration and offers to copy it to WSL, or uses Windows values as defaults
+- Setting up Git with your name and email (with intelligent defaults from Windows)
 - Installing and configuring GPG for secure credential storage
-- Installing Git Credential Manager for easier authentication (or using Git for Windows credential manager if available)
+- **Smart Credential Management**: Detects Git for Windows and offers to use Windows credentials in WSL, or installs Linux Git Credential Manager as fallback
 - Setting up Homebrew
 - Installing pyenv for Python version management
 - Installing nvm for Node.js version management
@@ -23,9 +24,19 @@ This script sets up a complete development environment by:
   - Cursor editor
   - Docker Desktop
 
-The script will ask for your Git name, email, and which components you want to install before proceeding.
+The script will intelligently detect your existing Windows setup and ask relevant questions based on what it finds.
 
-**Smart Git Credential Manager Detection**: If you're running in WSL and have Git for Windows installed, the script will automatically use the Windows Git Credential Manager instead of installing the Linux version, providing better integration with Windows authentication systems.
+**Smart Git Configuration Detection**: 
+- If you have Git configured in Windows, the script offers to copy your entire `.gitconfig` file to WSL
+- If you decline copying but have Windows Git config, it uses your Windows name/email as defaults for manual entry
+- Eliminates the need to re-enter information you've already configured
+
+**Smart Git Credential Manager Detection**: 
+- If Git for Windows is installed, the script asks if you want to use Windows Git credentials in WSL
+- If you prefer, it can install the Linux version of Git Credential Manager instead
+- Provides seamless integration with Windows authentication systems when desired
+
+This approach provides the best of both worlds: convenience through automation while maintaining user control over the configuration.
 
 ## Advanced Usage
 

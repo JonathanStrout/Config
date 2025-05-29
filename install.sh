@@ -23,6 +23,11 @@ INSTALL_HOMEBREW_CHOICE=""
 INSTALL_GCM_CHOICE=""
 WSL_CONF_MODIFIED=false
 WINDOWS_GIT_FOUND=false
+WINDOWS_GIT_CONFIG_EXISTS=false
+WINDOWS_GIT_NAME=""
+WINDOWS_GIT_EMAIL=""
+COPY_WINDOWS_GIT_CONFIG=false
+USE_WINDOWS_CREDENTIALS=false
 
 
 # Function to print status messages
@@ -107,6 +112,41 @@ parse_args() {
     done
 }
 
+# Detect Windows Git configuration
+detect_windows_git_config() {
+    if [ -d "/mnt/c" ]; then
+        # Get Windows username
+        WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')
+        
+        # Check for Windows Git global config
+        WINDOWS_GITCONFIG_PATH="/mnt/c/Users/$WIN_USERNAME/.gitconfig"
+        
+        if [ -f "$WINDOWS_GITCONFIG_PATH" ]; then
+            WINDOWS_GIT_CONFIG_EXISTS=true
+            
+            # Extract name and email from Windows Git config
+            if command -v git >/dev/null 2>&1; then
+                # Use git to read the Windows config file
+                WINDOWS_GIT_NAME=$(git config -f "$WINDOWS_GITCONFIG_PATH" user.name 2>/dev/null || echo "")
+                WINDOWS_GIT_EMAIL=$(git config -f "$WINDOWS_GITCONFIG_PATH" user.email 2>/dev/null || echo "")
+            else
+                # Fallback: parse the file manually
+                WINDOWS_GIT_NAME=$(grep -E "^\s*name\s*=" "$WINDOWS_GITCONFIG_PATH" 2>/dev/null | sed 's/.*=\s*//' | tr -d '\r' || echo "")
+                WINDOWS_GIT_EMAIL=$(grep -E "^\s*email\s*=" "$WINDOWS_GITCONFIG_PATH" 2>/dev/null | sed 's/.*=\s*//' | tr -d '\r' || echo "")
+            fi
+            
+            if [ -n "$WINDOWS_GIT_NAME" ] || [ -n "$WINDOWS_GIT_EMAIL" ]; then
+                print_verbose "Found Windows Git config: Name='$WINDOWS_GIT_NAME', Email='$WINDOWS_GIT_EMAIL'"
+            fi
+        fi
+        
+        # Check if Git for Windows exists (for credential manager detection)
+        if [ -d "/mnt/c/Program Files/Git/mingw64/bin" ]; then
+            WINDOWS_GIT_FOUND=true
+        fi
+    fi
+}
+
 # Gather all user input at the beginning
 gather_user_input() {
     if [ "$NON_INTERACTIVE" = true ]; then
@@ -114,47 +154,121 @@ gather_user_input() {
         return
     fi
 
-    # Git name
-    if ! git config --global user.name >/dev/null 2>&1; then
-        if [ -z "$GIT_NAME" ]; then
-            read -p "Enter your git name: " GIT_NAME
-            if [ -z "$GIT_NAME" ]; then
-                print_warning "Git name not provided, skipping..."
-            fi
+    # Windows Git Configuration Handling
+    if [ "$WINDOWS_GIT_CONFIG_EXISTS" = true ]; then
+        echo ""
+        print_status "Windows Git configuration detected!"
+        if [ -n "$WINDOWS_GIT_NAME" ]; then
+            echo "  Name: $WINDOWS_GIT_NAME"
         fi
-    else
-        current_name=$(git config --global user.name)
-        echo "Git name already configured as: $current_name"
-        read -p "Do you want to change it? (y/n): " change_name
-        if [[ "$change_name" == "y" ]]; then
-            CHANGE_GIT_CONFIG=true
-            read -p "Enter your git Name: " GIT_NAME
+        if [ -n "$WINDOWS_GIT_EMAIL" ]; then
+            echo "  Email: $WINDOWS_GIT_EMAIL"
+        fi
+        echo ""
+        
+        read -p "Do you want to copy your Windows Git configuration to WSL? (Y/n): " copy_choice
+        if [[ "$copy_choice" != "n" && "$copy_choice" != "N" ]]; then
+            COPY_WINDOWS_GIT_CONFIG=true
+            GIT_NAME="$WINDOWS_GIT_NAME"
+            GIT_EMAIL="$WINDOWS_GIT_EMAIL"
+            print_status "Will copy Windows Git configuration to WSL."
+        else
+            print_status "Windows Git config will not be copied."
         fi
     fi
 
-    # Git email
-    if ! git config --global user.email >/dev/null 2>&1; then
-        if [ -z "$GIT_EMAIL" ]; then
-            read -p "Enter your Git email: " GIT_EMAIL
-            if [ -z "$GIT_EMAIL" ]; then
-                print_warning "Git email not provided, skipping..."
+    # Git name configuration
+    if [ "$COPY_WINDOWS_GIT_CONFIG" = false ]; then
+        if ! git config --global user.name >/dev/null 2>&1; then
+            if [ -z "$GIT_NAME" ]; then
+                # Use Windows Git name as default if available
+                if [ -n "$WINDOWS_GIT_NAME" ]; then
+                    read -p "Enter your git name [$WINDOWS_GIT_NAME]: " GIT_NAME
+                    if [ -z "$GIT_NAME" ]; then
+                        GIT_NAME="$WINDOWS_GIT_NAME"
+                    fi
+                else
+                    read -p "Enter your git name: " GIT_NAME
+                fi
+                
+                if [ -z "$GIT_NAME" ]; then
+                    print_warning "Git name not provided, skipping..."
+                fi
+            fi
+        else
+            current_name=$(git config --global user.name)
+            echo "Git name already configured as: $current_name"
+            read -p "Do you want to change it? (y/n): " change_name
+            if [[ "$change_name" == "y" ]]; then
+                CHANGE_GIT_CONFIG=true
+                if [ -n "$WINDOWS_GIT_NAME" ]; then
+                    read -p "Enter your git name [$WINDOWS_GIT_NAME]: " GIT_NAME
+                    if [ -z "$GIT_NAME" ]; then
+                        GIT_NAME="$WINDOWS_GIT_NAME"
+                    fi
+                else
+                    read -p "Enter your git name: " GIT_NAME
+                fi
             fi
         fi
-    else
-        current_email=$(git config --global user.email)
-        echo "Git email already configured as: $current_email"
-        read -p "Do you want to change it? (y/n): " change_email
-        if [[ "$change_email" == "y" ]]; then
-            CHANGE_GIT_CONFIG=true
-            read -p "Enter your Git email: " GIT_EMAIL
+
+        # Git email configuration
+        if ! git config --global user.email >/dev/null 2>&1; then
+            if [ -z "$GIT_EMAIL" ]; then
+                # Use Windows Git email as default if available
+                if [ -n "$WINDOWS_GIT_EMAIL" ]; then
+                    read -p "Enter your Git email [$WINDOWS_GIT_EMAIL]: " GIT_EMAIL
+                    if [ -z "$GIT_EMAIL" ]; then
+                        GIT_EMAIL="$WINDOWS_GIT_EMAIL"
+                    fi
+                else
+                    read -p "Enter your Git email: " GIT_EMAIL
+                fi
+                
+                if [ -z "$GIT_EMAIL" ]; then
+                    print_warning "Git email not provided, skipping..."
+                fi
+            fi
+        else
+            current_email=$(git config --global user.email)
+            echo "Git email already configured as: $current_email"
+            read -p "Do you want to change it? (y/n): " change_email
+            if [[ "$change_email" == "y" ]]; then
+                CHANGE_GIT_CONFIG=true
+                if [ -n "$WINDOWS_GIT_EMAIL" ]; then
+                    read -p "Enter your Git email [$WINDOWS_GIT_EMAIL]: " GIT_EMAIL
+                    if [ -z "$GIT_EMAIL" ]; then
+                        GIT_EMAIL="$WINDOWS_GIT_EMAIL"
+                    fi
+                else
+                    read -p "Enter your Git email: " GIT_EMAIL
+                fi
+            fi
         fi
     fi
     
-    # Git Credential Manager installation
-    if [ "$INSTALL_GCM" = true ]; then
-        read -p "Do you want to install Git Credential Manager? (Y/n): " INSTALL_GCM_CHOICE
-        if [[ "$INSTALL_GCM_CHOICE" == "n" || "$INSTALL_GCM_CHOICE" == "N" ]]; then
-            INSTALL_GCM=false
+    # Git Credential Manager handling
+    if [ "$WINDOWS_GIT_FOUND" = true ]; then
+        echo ""
+        print_status "Git for Windows detected with credential manager support!"
+        read -p "Do you want to use Windows Git credentials in WSL? (Y/n): " use_windows_creds
+        if [[ "$use_windows_creds" != "n" && "$use_windows_creds" != "N" ]]; then
+            USE_WINDOWS_CREDENTIALS=true
+            INSTALL_GCM=false  # Don't install Linux version
+            print_status "Will configure WSL to use Windows Git Credential Manager."
+        else
+            read -p "Do you want to install Git Credential Manager for Linux instead? (Y/n): " INSTALL_GCM_CHOICE
+            if [[ "$INSTALL_GCM_CHOICE" == "n" || "$INSTALL_GCM_CHOICE" == "N" ]]; then
+                INSTALL_GCM=false
+            fi
+        fi
+    else
+        # Original GCM question for when Windows Git is not found
+        if [ "$INSTALL_GCM" = true ]; then
+            read -p "Do you want to install Git Credential Manager? (Y/n): " INSTALL_GCM_CHOICE
+            if [[ "$INSTALL_GCM_CHOICE" == "n" || "$INSTALL_GCM_CHOICE" == "N" ]]; then
+                INSTALL_GCM=false
+            fi
         fi
     fi
     
@@ -211,43 +325,82 @@ install_system_packages() {
 configure_git() {
     print_status "Setting up Git configuration..."
     
-    # Handle Git name
-    if ! git config --global user.name >/dev/null 2>&1; then
-        if [ -n "$GIT_NAME" ]; then
+    # If copying Windows Git config, copy the entire .gitconfig file
+    if [ "$COPY_WINDOWS_GIT_CONFIG" = true ] && [ "$WINDOWS_GIT_CONFIG_EXISTS" = true ]; then
+        WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')
+        WINDOWS_GITCONFIG_PATH="/mnt/c/Users/$WIN_USERNAME/.gitconfig"
+        
+        if [ -f "$WINDOWS_GITCONFIG_PATH" ]; then
+            print_status "Copying Windows Git configuration to WSL..."
+            cp "$WINDOWS_GITCONFIG_PATH" "$HOME/.gitconfig"
+            check_success "Failed to copy Windows Git configuration"
+            
+            # Convert Windows line endings to Unix
+            if command -v dos2unix >/dev/null 2>&1; then
+                dos2unix "$HOME/.gitconfig" >/dev/null 2>&1
+            else
+                # Fallback: manual conversion
+                sed -i 's/\r$//' "$HOME/.gitconfig" 2>/dev/null || true
+            fi
+            
+            print_status "Windows Git configuration copied successfully"
+            
+            # Verify the copied configuration
+            COPIED_NAME=$(git config --global user.name 2>/dev/null || echo "")
+            COPIED_EMAIL=$(git config --global user.email 2>/dev/null || echo "")
+            
+            if [ -n "$COPIED_NAME" ]; then
+                print_status "Git name: $COPIED_NAME"
+            fi
+            if [ -n "$COPIED_EMAIL" ]; then
+                print_status "Git email: $COPIED_EMAIL"
+            fi
+        else
+            print_warning "Windows Git config file not found, falling back to manual configuration"
+            COPY_WINDOWS_GIT_CONFIG=false
+        fi
+    fi
+    
+    # Manual Git configuration (if not copying from Windows or if copy failed)
+    if [ "$COPY_WINDOWS_GIT_CONFIG" = false ]; then
+        # Handle Git name
+        if ! git config --global user.name >/dev/null 2>&1; then
+            if [ -n "$GIT_NAME" ]; then
+                git config --global user.name "$GIT_NAME"
+                check_success "Failed to set Git name"
+                print_status "Git name set to: $GIT_NAME"
+            else
+                print_warning "Git name not provided, skipping..."
+            fi
+        elif [ "$CHANGE_GIT_CONFIG" = true ] && [ -n "$GIT_NAME" ]; then
             git config --global user.name "$GIT_NAME"
             check_success "Failed to set Git name"
-            print_status "Git name set to: $GIT_NAME"
+            print_status "Git name updated to: $GIT_NAME"
         else
-            print_warning "Git name not provided, skipping..."
+            current_name=$(git config --global user.name)
+            print_verbose "Git name already configured as: $current_name"
         fi
-    elif [ "$CHANGE_GIT_CONFIG" = true ] && [ -n "$GIT_NAME" ]; then
-        git config --global user.name "$GIT_NAME"
-        check_success "Failed to set Git name"
-        print_status "Git name updated to: $GIT_NAME"
-    else
-        current_name=$(git config --global user.name)
-        print_verbose "Git name already configured as: $current_name"
-    fi
 
-    # Handle Git email
-    if ! git config --global user.email >/dev/null 2>&1; then
-        if [ -n "$GIT_EMAIL" ]; then
+        # Handle Git email
+        if ! git config --global user.email >/dev/null 2>&1; then
+            if [ -n "$GIT_EMAIL" ]; then
+                git config --global user.email "$GIT_EMAIL"
+                check_success "Failed to set Git email"
+                print_status "Git email set to: $GIT_EMAIL"
+            else
+                print_warning "Git email not provided, skipping..."
+            fi
+        elif [ "$CHANGE_GIT_CONFIG" = true ] && [ -n "$GIT_EMAIL" ]; then
             git config --global user.email "$GIT_EMAIL"
             check_success "Failed to set Git email"
-            print_status "Git email set to: $GIT_EMAIL"
+            print_status "Git email updated to: $GIT_EMAIL"
         else
-            print_warning "Git email not provided, skipping..."
+            current_email=$(git config --global user.email)
+            print_verbose "Git email already configured as: $current_email"
         fi
-    elif [ "$CHANGE_GIT_CONFIG" = true ] && [ -n "$GIT_EMAIL" ]; then
-        git config --global user.email "$GIT_EMAIL"
-        check_success "Failed to set Git email"
-        print_status "Git email updated to: $GIT_EMAIL"
-    else
-        current_email=$(git config --global user.email)
-        print_verbose "Git email already configured as: $current_email"
     fi
 
-    # Configure default Git branch name
+    # Configure default Git branch name (always set this)
     if ! git config --global init.defaultBranch >/dev/null 2>&1; then
         print_status "Setting default Git branch to 'main'..."
         git config --global init.defaultBranch main
@@ -375,8 +528,6 @@ configure_wsl() {
         # Check for Git for Windows and add to PATH if present
         if [ -d "/mnt/c/Program Files/Git/mingw64/bin" ]; then
             echo 'export PATH="$PATH:/mnt/c/Program Files/Git/mingw64/bin" # Adds Git for Windows to path' >> "$LINUX_HOME/.bashrc"
-            WINDOWS_GIT_FOUND=true
-            print_status "Git for Windows found - will use Windows Git Credential Manager"
         fi
 
         if [ -d "/mnt/c/Users/$WIN_USERNAME/AppData/Local/Programs/Microsoft VS Code" ]; then
@@ -420,14 +571,14 @@ EOF
 
 # Install Git Credential Manager
 install_git_credential_manager() {
-    if [ "$INSTALL_GCM" = false ]; then
+    if [ "$INSTALL_GCM" = false ] && [ "$USE_WINDOWS_CREDENTIALS" = false ]; then
         print_status "Skipping Git Credential Manager installation."
         return
     fi
     
-    # If Windows Git was found, use that instead of installing Linux GCM
-    if [ "$WINDOWS_GIT_FOUND" = true ]; then
-        print_status "Using Git Credential Manager from Git for Windows..."
+    # If user chose to use Windows credentials
+    if [ "$USE_WINDOWS_CREDENTIALS" = true ]; then
+        print_status "Configuring WSL to use Windows Git Credential Manager..."
         
         # Configure Git to use the credential manager from Windows
         if [ -f "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe" ]; then
@@ -752,12 +903,10 @@ print_summary() {
         echo -e "- Homebrew (Package manager)"
     fi
 
-    if [ "$INSTALL_GCM" = true ]; then
-        if [ "$WINDOWS_GIT_FOUND" = true ]; then
-            echo -e "- Git Credential Manager (from Git for Windows)"
-        else
-            echo -e "- Git Credential Manager (Linux version)"
-        fi
+    if [ "$USE_WINDOWS_CREDENTIALS" = true ]; then
+        echo -e "- Git Credential Manager (using Windows credentials)"
+    elif [ "$INSTALL_GCM" = true ]; then
+        echo -e "- Git Credential Manager (Linux version)"
     fi
 
     if [ -d "/mnt/c" ]; then
@@ -772,6 +921,7 @@ print_summary() {
 # Main function to orchestrate the installation
 main() {
     parse_args "$@"
+    detect_windows_git_config
     gather_user_input
     setup_sudo
     install_system_packages
