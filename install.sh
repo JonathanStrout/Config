@@ -958,41 +958,43 @@ prompt_wsl_restart() {
     if [ "$WSL_CONF_MODIFIED" = true ] && [ -d "/mnt/c" ]; then
         echo ""
         print_status "WSL configuration has been modified and requires a restart to take effect."
-        read -p "Would you like to restart WSL now? (Y/n): " RESTART_CHOICE
         
-        if [[ "$RESTART_CHOICE" != "n" && "$RESTART_CHOICE" != "N" ]]; then
-            print_status "Restarting WSL and returning you to the terminal..."
-            print_status "WSL will shutdown, wait 3 seconds, then automatically restart."
-            
-            # Create a temporary PowerShell script for the restart sequence
-            WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')
-            RESTART_SCRIPT="/mnt/c/Users/$WIN_USERNAME/temp_wsl_restart.ps1"
-            
-            cat > "$RESTART_SCRIPT" << 'EOF'
-# WSL Restart Script
-Write-Host "Shutting down WSL..."
+        # Create a restart batch file on the Windows desktop
+        WIN_USERNAME=$(/mnt/c/Windows/System32/cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')
+        DESKTOP_PATH="/mnt/c/Users/$WIN_USERNAME/Desktop"
+        RESTART_BATCH="$DESKTOP_PATH/Restart-WSL.bat"
+        
+        cat > "$RESTART_BATCH" << 'EOF'
+@echo off
+echo Restarting WSL...
+echo.
+echo Shutting down WSL...
 wsl --shutdown
-
-Write-Host "Waiting 3 seconds for WSL to fully shutdown..."
-Start-Sleep -Seconds 3
-
-Write-Host "Starting WSL..."
+echo.
+echo Waiting 3 seconds for WSL to fully shutdown...
+timeout /t 3 /nobreak >nul
+echo.
+echo Starting WSL...
 wsl
+echo.
+echo WSL restarted successfully!
+pause
 EOF
-            
-            # Execute the PowerShell script and remove it
-            /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -ExecutionPolicy Bypass -File "$RESTART_SCRIPT"
-            
-            # Clean up the temporary script (this may not execute if WSL shuts down first)
-            rm -f "$RESTART_SCRIPT" 2>/dev/null || true
-            
-            exit 0
-        else
-            print_warning "WSL restart skipped. Some changes won't take effect until you restart WSL."
-            print_warning "To restart later, run this command in Windows PowerShell or Command Prompt:"
-            echo "    wsl --shutdown"
-            echo "    (wait a few seconds, then run 'wsl' to re-enter)"
-        fi
+        
+        print_status "Created restart batch file: Restart-WSL.bat on your Desktop"
+        echo ""
+        echo -e "${YELLOW}To restart WSL and apply all changes:${NC}"
+        echo -e "1. ${GREEN}Close this WSL terminal${NC}"
+        echo -e "2. ${GREEN}Double-click 'Restart-WSL.bat' on your Desktop${NC}"
+        echo -e "   ${BLUE}(Or run it from PowerShell/Command Prompt)${NC}"
+        echo ""
+        echo -e "${YELLOW}Alternative manual method:${NC}"
+        echo -e "Run these commands in Windows PowerShell or Command Prompt:"
+        echo -e "  ${BLUE}wsl --shutdown${NC}"
+        echo -e "  ${BLUE}wsl${NC}"
+        echo ""
+        
+        read -p "Press Enter to continue and finish the installation..."
     fi
 }
 
